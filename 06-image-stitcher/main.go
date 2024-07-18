@@ -2,8 +2,16 @@ package main
 
 import (
 	"fmt"
-	"io"
+	"image"
+	"image/draw"
+	_ "image/gif"
+	_ "image/jpeg"
+	"image/png"
+	_ "image/png"
+	"math/rand/v2"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 /// Assignment:
@@ -31,18 +39,74 @@ func main() {
 //		- make a request to the new version
 //          - a percentage
 
-// https://picsum.photos/id/%d/200
-func ImageHandler(w http.ResponseWriter, r *http.Request) {
-	// first number is the ID, second number is the size
-	resp, err := http.Get("https://picsum.photos/id/237/600")
+func randRange(min, max int) int {
+	return rand.IntN(max-min) + min
+}
+
+// range 0 - 1029 (inclusive)
+func grabImage() image.Image {
+	imageID := randRange(0, 1029+1)
+	url := fmt.Sprintf("https://picsum.photos/id/%d/200", imageID)
+	resp, err := http.Get(url)
 	if err != nil {
 		panic(err)
 	}
-	defer resp.Body.Close() // to avoid leaking memory / file descriptors
-	body, err := io.ReadAll(resp.Body)
-	//fmt.Fprintf(w, "body: %#v!", body)
-	if _, err := w.Write(body); err != nil {
-		panic(err)
+	defer resp.Body.Close()
+	img, _, err := image.Decode(resp.Body)
+	if err != nil {
+		return grabImage()
 	}
-	//fmt.Fprintf(w, "Hello, %#v!", r.URL.Path[0:])
+	return img
+}
+
+func grabNImages(n int) []image.Image {
+	res := make([]image.Image, n)
+
+	results := make(chan image.Image)
+	for i := 0; i < n; i++ {
+		fn := func() {
+			image := grabImage()
+			results <- image
+		}
+		go fn()
+	}
+	for i := 0; i < n; i++ {
+		res[i] = <-results
+	}
+	return res
+}
+
+// https://picsum.photos/id/%d/200
+func ImageHandler(w http.ResponseWriter, r *http.Request) {
+	st := time.Now()
+
+	numImages, err := strconv.Atoi(r.URL.Path[1:])
+	if err != nil {
+		fmt.Fprintf(w, "Path must be a number")
+		return
+	}
+
+	// serial
+	//images := make([]image.Image, numImages)
+	//for i, _ := range images {
+	//	images[i] = grabImage()
+	//}
+
+	// parallel
+	images := grabNImages(numImages)
+
+	finalWidth := 200
+	finalHeight := 200 * len(images)
+	finalImg := image.NewRGBA(image.Rect(0, 0, finalWidth, finalHeight))
+	for i, img := range images {
+		x := 0
+		y := i * 200
+		draw.Draw(finalImg, image.Rect(0, i*200, x+200, y+200), img, image.Point{0, 0}, draw.Over)
+	}
+
+	if err := png.Encode(w, finalImg); err != nil {
+		fmt.Fprintf(w, "Error: %s", err)
+	}
+
+	fmt.Printf("Got %d images in %.2f seconds\n", numImages, time.Since(st).Seconds())
 }
