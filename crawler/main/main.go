@@ -58,6 +58,18 @@ func main() {
 	http.ListenAndServe(":8080", nil)
 }
 
+func removeDuplicate[T comparable](sliceList []T) []T {
+	allKeys := make(map[T]bool)
+	list := []T{}
+	for _, item := range sliceList {
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+			list = append(list, item)
+		}
+	}
+	return list
+}
+
 func Handler(w http.ResponseWriter, r *http.Request) {
 	urls := ScrapeURLs("https://slashdot.org/")
 
@@ -67,7 +79,14 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "couldn't parse URL: %s (%w), skipping...\n", u, err)
 		}
+		if parsed.Path == "" {
+			continue
+		}
 		urlsByHostname[parsed.Hostname()] = append(urlsByHostname[parsed.Hostname()], parsed.Path)
+	}
+
+	for k, v := range urlsByHostname {
+		urlsByHostname[k] = removeDuplicate(v)
 	}
 
 	fmt.Fprintf(w, `{"urls": `)
