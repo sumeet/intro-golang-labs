@@ -1,0 +1,66 @@
+package main
+
+import (
+	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	"image/png"
+	_ "image/png"
+	"net/http"
+)
+
+/// Assignment:
+/// Change ImageHandler to accept:
+///  /N - where N is a number
+///
+/// - Grab N images
+/// - Stitch them together using https://pkg.go.dev/image
+///
+/// Stretch:
+/// - Do the fetches in parallel
+
+func main() {
+	http.HandleFunc("/", ImageHandler)
+	fmt.Println("Listening on port http://localhost:8080")
+	http.ListenAndServe(":8080", nil)
+}
+
+// benchmarker programs
+// Apache Bench -- `ab`
+// Python Swarm
+// "dark launch" -- feature flags
+//		- make request to the old version
+//			- the real data
+//		- make a request to the new version
+//          - a percentage
+
+func fetchImage() image.Image {
+	resp, err := http.Get("https://picsum.photos/id/1/600")
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	img, _, err := image.Decode(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	return img
+}
+
+// widthxheight 200x200 (single image)
+// (in a strip of N images)
+// 200 x (200*n)
+
+// png/gif/jpg(lossy)
+
+// https://picsum.photos/id/%d/200
+func ImageHandler(w http.ResponseWriter, r *http.Request) {
+	// first number is the ID, second number is the size
+	img := fetchImage()
+	//fmt.Fprintf(w, "body: %#v!", body)
+
+	if err := png.Encode(w, img); err != nil {
+		fmt.Fprintf(w, "Error: %s", err)
+	}
+}

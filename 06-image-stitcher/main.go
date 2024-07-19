@@ -54,6 +54,7 @@ func grabImage() image.Image {
 	defer resp.Body.Close()
 	img, _, err := image.Decode(resp.Body)
 	if err != nil {
+		// some of the images we can't decode for some reason, so... try again in a janky way
 		return grabImage()
 	}
 	return img
